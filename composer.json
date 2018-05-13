@@ -1,0 +1,23 @@
+{
+    "name": "mylxsw/rabbitmq-pubsub-php",
+    "description": "“RabbitMQ发布订阅实战-实现延时重试队列”一文的php代码示例",
+    "type": "project",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "管宜尧",
+            "email": "mylxsw@aicode.cc"
+        }
+    ],
+    "require": {
+        "php": ">=7.1",
+        "php-amqplib/php-amqplib": "^2.7",
+        "symfony/console": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Aicode\\RabbitMQ\\": "src/",
+            "Aicode\\Demo\\RabbitMQ\\Commands\\": "example/commands/"
+        }
+    }
+}
