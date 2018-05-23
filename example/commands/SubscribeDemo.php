@@ -9,6 +9,8 @@
 namespace Aicode\Demo\RabbitMQ\Commands;
 
 use Aicode\RabbitMQ\SubscribeCommand;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
 
 class SubscribeDemo extends SubscribeCommand
 {
@@ -18,6 +20,8 @@ class SubscribeDemo extends SubscribeCommand
             ->setDescription('消息订阅demo');
 
         $this->addOption('retry-failed');
+
+        $this->addArgument('queue_name', InputArgument::REQUIRED, "队列名称");
     }
 
     /**
@@ -55,9 +59,9 @@ class SubscribeDemo extends SubscribeCommand
      *
      * @return string
      */
-    protected function getQueueName(): string
+    protected function getQueueName(InputInterface $input): string
     {
-        return 'user-monitor';
+        return $input->getArgument('queue_name');
     }
 
     /**

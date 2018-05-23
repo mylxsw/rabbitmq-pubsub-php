@@ -29,7 +29,7 @@ class PublishDemo extends Command
         $publisher = new Publisher(new RabbitMQ(), 'master');
 
         $publisher->publish(new Message(['id' => uniqid(), 'name' => 'mylxsw']), 'user.created');
-        $publisher->publish(new Message(['id' => uniqid()]), 'user.deleted');
+//        $publisher->publish(new Message(['id' => uniqid()]), 'user.deleted');
 
         $output->writeln('消息发送完成');
     }

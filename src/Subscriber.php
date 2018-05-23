@@ -21,6 +21,8 @@ use PhpAmqpLib\Wire\AMQPTable;
  */
 class Subscriber extends PubSub implements Subscribe
 {
+    use Helpers;
+
     /**
      * 订阅消费
      *
@@ -48,16 +50,37 @@ class Subscriber extends PubSub implements Subscribe
         $this->declareFailedQueue($queueName, $routingKey);
 
         // 发起延时重试
-        $publishRetry = function (AMQPMessage $msg) {
-            $this->channel->basic_publish($msg, $this->exchangeRetryTopic(),
-                $msg->get('routing_key'));
+        $publishRetry = function (AMQPMessage $msg) use ($queueName) {
+
+            /** @var AMQPTable $headers */
+            if ($msg->has('application_headers')) {
+                $headers = $msg->get('application_headers');
+            } else {
+                $headers = new AMQPTable();
+            }
+
+            $headers->set('x-orig-routing-key', $this->getOrigRoutingKey($msg));
+
+            $properties = $msg->get_properties();
+            $properties['application_headers'] = $headers;
+            $newMsg = new AMQPMessage($msg->getBody(), $properties);
+
+
+            $this->channel->basic_publish(
+                $newMsg,
+                $this->exchangeRetryTopic(),
+                $queueName
+            );
             $msg->delivery_info['channel']->basic_ack($msg->delivery_info['delivery_tag']);
         };
 
         // 将消息发送到失败队列
-        $publishFailed = function (AMQPMessage $msg) {
-            $this->channel->basic_publish($msg, $this->exchangeFailedTopic(),
-                $msg->get('routing_key'));
+        $publishFailed = function (AMQPMessage $msg) use ($queueName) {
+            $this->channel->basic_publish(
+                $msg,
+                $this->exchangeFailedTopic(),
+                $queueName
+            );
             $msg->delivery_info['channel']->basic_ack($msg->delivery_info['delivery_tag']);
         };
 
@@ -107,14 +130,16 @@ class Subscriber extends PubSub implements Subscribe
             false,
             false,
             false,
-            function (AMQPMessage $msg) use ($queueName, $routingKey, $callback) {
+            function (AMQPMessage $msg) use ($queueName, $callback) {
                 if (is_null($callback) || $callback($msg)) {
                     // 重置header中的x-death属性
-                    $msg->set('application_headers', new AMQPTable([]));
+                    $msg->set('application_headers', new AMQPTable([
+                        'x-orig-routing-key' => $this->getOrigRoutingKey($msg),
+                    ]));
                     $this->channel->basic_publish(
                         $msg,
                         $this->exchangeTopic(),
-                        $msg->get('routing_key')
+                        $queueName
                     );
                 }
 
@@ -141,7 +166,7 @@ class Subscriber extends PubSub implements Subscribe
      */
     private function declareRetryQueue(string $queueName, string $routingKey): string
     {
-        $retryQueueName = $queueName . '@retry';
+        $retryQueueName = $this->getRetryQueueName($queueName);
         $this->channel->queue_declare(
             $retryQueueName,
             false,
@@ -150,11 +175,12 @@ class Subscriber extends PubSub implements Subscribe
             false,
             false,
             new AMQPTable([
-                'x-dead-letter-exchange' => $this->exchangeTopic(),
-                'x-message-ttl'          => 30 * 1000,
+                'x-dead-letter-exchange'    => $this->exchangeTopic(),
+                'x-dead-letter-routing-key' => $queueName,
+                'x-message-ttl'             => 30 * 1000,
             ])
         );
-        $this->channel->queue_bind($retryQueueName, $this->exchangeRetryTopic(), $routingKey);
+        $this->channel->queue_bind($retryQueueName, $this->exchangeRetryTopic(), $queueName);
 
         return $retryQueueName;
     }
@@ -171,6 +197,7 @@ class Subscriber extends PubSub implements Subscribe
     {
         $this->channel->queue_declare($queueName, false, true, false, false, false);
         $this->channel->queue_bind($queueName, $this->exchangeTopic(), $routingKey);
+        $this->channel->queue_bind($queueName, $this->exchangeTopic(), $queueName);
 
         return $queueName;
     }
@@ -185,11 +212,14 @@ class Subscriber extends PubSub implements Subscribe
      */
     private function declareFailedQueue(string $queueName, string $routingKey): string
     {
-        $failedQueueName = "{$queueName}@failed";
+        $failedQueueName = $this->getFailedQueueName($queueName);
         $this->channel->queue_declare($failedQueueName, false, true, false, false, false);
-        $this->channel->queue_bind($failedQueueName, $this->exchangeFailedTopic(), $routingKey);
+        $this->channel->queue_bind(
+            $failedQueueName,
+            $this->exchangeFailedTopic(),
+            $queueName
+        );
 
         return $failedQueueName;
     }
-
 }

@@ -33,6 +33,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 abstract class SubscribeCommand extends Command
 {
+    use Helpers;
+
     /**
      * 命令执行入口
      *
@@ -91,9 +93,11 @@ abstract class SubscribeCommand extends Command
     /**
      * 获取监听的队列名称
      *
+     * @param InputInterface $input
+     *
      * @return string
      */
-    abstract protected function getQueueName(): string;
+    abstract protected function getQueueName(InputInterface $input): string;
 
     /**
      * 获取监听的路由
@@ -127,7 +131,7 @@ abstract class SubscribeCommand extends Command
         $callback = function (AMQPMessage $msg) use ($output) {
             $retry = $this->getRetryCount($msg);
 
-            $subMessage = new SubMessage($msg, $msg->get('routing_key'), [
+            $subMessage = new SubMessage($msg, $this->getOrigRoutingKey($msg), [
                 'retry_count' => $retry, // 重试次数
             ]);
 
@@ -136,7 +140,7 @@ abstract class SubscribeCommand extends Command
 
         $subscriber = new Subscriber($this->getRabbitMQ(), $this->getExchangeName());
         $subscriber->retryFailed(
-            $this->getQueueName(),
+            $this->getQueueName($input),
             $this->getRoutingKey(),
             $callback
         );
@@ -175,7 +179,7 @@ abstract class SubscribeCommand extends Command
             $retry = $this->getRetryCount($msg);
 
             try {
-                $subMessage = new SubMessage($msg, $msg->get('routing_key'), [
+                $subMessage = new SubMessage($msg, $this->getOrigRoutingKey($msg), [
                     'retry_count' => $retry, // 重试次数
                 ]);
 
@@ -207,7 +211,7 @@ abstract class SubscribeCommand extends Command
 
         $subscriber = new Subscriber($this->getRabbitMQ(), $this->getExchangeName());
         $subscriber->consume(
-            $this->getQueueName(),
+            $this->getQueueName($input),
             $this->getRoutingKey(),
             $callback,
             function () use (&$stopped, &$autoExitCounter) {
@@ -235,4 +239,5 @@ abstract class SubscribeCommand extends Command
 
         return (int)$retry;
     }
+
 }
